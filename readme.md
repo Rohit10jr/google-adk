@@ -62,7 +62,7 @@ This repository contains multiple example agents and tools built using the [Goog
 
 - This is a learning and experimentation project for Google ADK agent development.
 - You can extend or modify any agent, tool, or workflow as you explore more ADK features.
-- Make sure to set up your API keys and environment variables as required by each example.
+- Ensure that you set up your API keys and environment variables as required by each example.
 
 ---
 
