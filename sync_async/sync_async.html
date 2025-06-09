@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Async vs Sync Demo</title>
+  <style>
+    .task { padding: 10px; margin: 5px; width: 200px; color: white; font-weight: bold; }
+    .sync { background-color: steelblue; }
+    .async { background-color: seagreen; }
+  </style>
+</head>
+<body>
+  <h2>Synchronous Tasks</h2>
+  <div id="sync-container"></div>
+  <h2>Asynchronous Tasks</h2>
+  <div id="async-container"></div>
+
+  <script>
+    function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function runSyncTasks() {
+      const container = document.getElementById('sync-container');
+      for (let i = 1; i <= 3; i++) {
+        const div = document.createElement('div');
+        div.className = 'task sync';
+        div.textContent = `Sync Task ${i} started`;
+        container.appendChild(div);
+        await delay(2000);
+        div.textContent = `Sync Task ${i} finished`;
+      }
+    }
+
+    async function runAsyncTasks() {
+      const container = document.getElementById('async-container');
+      const tasks = [];
+      for (let i = 1; i <= 3; i++) {
+        const div = document.createElement('div');
+        div.className = 'task async';
+        div.textContent = `Async Task ${i} started`;
+        container.appendChild(div);
+        tasks.push(
+          (async () => {
+            await delay(2000);
+            div.textContent = `Async Task ${i} finished`;
+          })()
+        );
+      }
+      await Promise.all(tasks);
+    }
+
+    runSyncTasks().then(runAsyncTasks);
+  </script>
+</body>
+</html>
