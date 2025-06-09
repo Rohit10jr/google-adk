@@ -1,30 +1,129 @@
-from google.adk.agents import Agent
+# main_agent.py
 
-def get_hsn_code(code: str):
+from google.adk.agents import Agent
+import pandas as pd
+from typing import List, Dict, Union, Any
+import os
+
+# --- Part 1: One-Time Data Loading at Application Startup ---
+# This code runs only ONCE when the 'adk web' command starts the server.
+
+# def load_hsn_data(file_path: str):
+def load_hsn_data(file_path: str) -> Dict[str, str]:
     """
-    returns the matching hsn code values
+    Loads HSN data from an Excel file into an efficient in-memory dictionary.
+    This function is called once when the application starts.
     """
-    if code == "100":
-        return {
-            "status" : "success",
-            "result" : "hello world"
-        }
-    elif code == "1000":
-        return { 
-            "status" : "success",
-            "result" : "hello India"
-            }
-    return {
-        "status" : "not found",
-        "result": "none"
-        }        
+    print(f"--- Initializing HSN Data Store from: {file_path} ---")
+    if not os.path.exists(file_path):
+        print(f"--- CRITICAL ERROR: HSN master file not found at '{file_path}'. The validation tool will be non-functional. ---")
+        return {}
+
+    try:
+        df = pd.read_excel(file_path, dtype={'HSNCode': str})
+
+        if 'HSNCode' not in df.columns or 'Description' not in df.columns:
+            print("--- CRITICAL ERROR: Excel file must contain 'HSNCode' and 'Description' columns. ---")
+            return {}
+
+        df.dropna(subset=['HSNCode'], inplace=True)
+        df['HSNCode'] = df['HSNCode'].str.strip()
+        hsn_map = pd.Series(df.Description.values, index=df.HSNCode).to_dict()
+        
+        print(f"--- Successfully loaded {len(hsn_map)} HSN codes into memory. ---")
+        return hsn_map
+
+    except Exception as e:
+        print(f"--- CRITICAL ERROR: An error occurred while reading the Excel file: {e} ---")
+        return {}
+
+# Load the data into a global variable. This is our in-memory data store.
+script_dir = os.path.dirname(__file__) # The directory where main_agent.py is located
+file_path = os.path.join(script_dir, "HSN_SAC.xlsx")
+hsn_master_data = load_hsn_data(file_path)
+# hsn_master_data = load_hsn_data("HSN_SAC.xlsx")
+
+
+# --- Part 2: The Fast and Efficient Tool Function ---
+# This tool now only works with the data already in memory.
+
+# def hsn_code_validation_tool(hsn_inputs: Union[str, List[str]]):
+def hsn_code_validation_tool(hsn_inputs: List[str]) -> List[Dict[str, Any]]:
+    """
+    Validates one or more HSN codes against the pre-loaded HSN master data.
+    This tool should be used for all HSN validation requests. It takes either a 
+    single HSN code as a string or a list of HSN codes as strings.
+    """
+    print(f"--- Tool 'hsn_code_validation_tool' called with: {hsn_inputs} ---")
+    
+    # Check if the data store was loaded successfully at 
+    if not hsn_master_data:
+         return [{
+            "input_hsn": str(hsn_inputs),
+            "is_valid": False,
+            "reason_code": "DATASTORE_UNAVAILABLE",
+            "message": "The HSN master data failed to load at startup. Cannot perform validation."
+        }]
+
+    # Normalize input to always be a list
+    # if isinstance(hsn_inputs, str):
+    #     codes_to_validate = [hsn_inputs]
+    # elif isinstance(hsn_inputs, list):
+    #     codes_to_validate = hsn_inputs
+    # else:
+    #     return [{
+    #         "input_hsn": str(hsn_inputs), "is_valid": False,
+    #         "reason_code": "INVALID_INPUT_TYPE",
+    #         "message": "Input must be a string or a list of strings."
+    #     }]
+
+    # The agent will call this tool with a list, so we can remove redundant type checks.
+    if not isinstance(hsn_inputs, list):
+         return [{
+            "input_hsn": str(hsn_inputs), "is_valid": False,
+            "reason_code": "INVALID_INPUT_TYPE",
+            "message": "Input must be a list of strings."
+        }]
+
+    results = []
+    for code in hsn_inputs:
+    # for code in codes_to_validate:
+        # Perform all validation checks as before
+        if not isinstance(code, str):
+            results.append({"input_hsn": str(code), "is_valid": False, "reason_code": "INVALID_ITEM_TYPE", "message": "Each HSN code must be a string."})
+            continue
+
+        clean_code = code.strip()
+
+        if not clean_code.isdigit() or len(clean_code) not in {2, 4, 6, 8}:
+            results.append({"input_hsn": code, "is_valid": False, "reason_code": "INVALID_FORMAT", "message": "HSN code must be numeric and 2, 4, 6, or 8 digits long."})
+            continue
+
+        # This is now an extremely fast lookup in the in-memory dictionary
+        description = hsn_master_data.get(clean_code)
+
+        if description:
+            results.append({"input_hsn": code, "is_valid": True, "description": description, "message": "HSN code is valid."})
+        else:
+            results.append({"input_hsn": code, "is_valid": False, "reason_code": "NOT_FOUND", "message": "HSN code not found in master data."})
+
+    return results
+
+# --- Part 3: Initialize the Root Agent ---
 
 root_agent = Agent(
-    name = "hsn_code_agent",
-    model="gemini-2.0-flash",
-    # model = "gemini-2.0-flash-exp",
-    # model="gemini-2.0-flash-live-001",
-    description = "agent to find the hsn code from given code number",
-    instruction = "your are a helpful agent who can have conversation and find hsn code details using the given tools",
-    tools = [get_hsn_code]
+    name="hsn_code_agent",
+    # Consider using the latest flash model for best performance
+    model="gemini-1.5-flash-001",
+    description="Agent to validate and look up HSN codes using a preloaded master data file.",
+    instruction="""
+    You are a helpful and efficient assistant for validating HSN codes.
+    Your primary goal is to understand the user's request, identify any HSN codes mentioned,
+    and use the provided 'hsn_code_validation_tool' to check their validity.
+    Present the results from the tool to the user in a clear, easy-to-read format.
+    If a code is valid, state its description. If invalid, state the reason.
+    """,
+    tools=[hsn_code_validation_tool]
 )
+
+print("\n--- Agent configuration complete. Ready for 'adk web' command. ---")

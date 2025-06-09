@@ -23,7 +23,11 @@ def load_hsn_data(file_path: str) -> Dict[str, str]:
         return {}
 
     try:
+        # Read the Excel file, ensuring HSNCode is treated as a string
+        # to preserve leading zeros (e.g., '01').
         df = pd.read_excel(file_path, dtype={'HSNCode': str})
+
+        # --- Data Cleaning and Validation of the Master File ---
         # Ensure required columns exist
         if 'HSNCode' not in df.columns or 'Description' not in df.columns:
             print("--- CRITICAL ERROR: Excel file must contain 'HSNCode' and 'Description' columns. ---")
@@ -127,15 +131,16 @@ def validate_hsn_codes(
 
     return results
 
-
 # --- Part 3: Testing the Function ---
 
 if __name__ == "__main__":
     # This block runs only when you execute the script directly.
     # It will not run when the functions are imported by another script (like an agent).
 
+    # Define the path to your Excel file
     HSN_FILE_PATH = "HSN_SAC.xlsx"
 
+    # Load the data ONCE
     hsn_master_data = load_hsn_data(HSN_FILE_PATH)
 
     # Proceed only if data was loaded successfully
