@@ -12,8 +12,9 @@ from google.adk.models.llm_request import LlmRequest
 from google.adk.models.llm_response import LlmResponse
 from google.genai import types
 import random 
+from google.adk.tools.base_tool import BaseTool
 
-def block_keyword_guardrail(
+def block_keyword_model_guardrail(
     callback_context: CallbackContext, llm_request: LlmRequest
 ) -> Optional[LlmResponse]:
     """
@@ -71,8 +72,73 @@ def block_keyword_guardrail(
 
 # print("block_keyword_guardrail function defined.")
 
-# --- Part 1: One-Time Data Loading at Application Startup ---
-# This code runs only ONCE when the 'adk web' command starts the server.
+def block_hsn_codes_tool_guardrail(
+    tool: BaseTool, args: Dict[str, Any], tool_context: ToolContext
+) -> Optional[Dict]:
+    """
+    Checks if 'get_weather_stateful' is called for 'Paris'.
+    If so, blocks the tool execution and returns a specific error dictionary.
+    Otherwise, allows the tool call to proceed by returning None.
+    """
+    tool_name = tool.name
+    agent_name = tool_context.agent_name # Agent attempting the tool call
+    print(f"--- Callback: block_hsn_codes_tool_guardrail running for tool '{tool_name}' in agent '{agent_name}' ---")
+    print(f"--- Callback: Inspecting args: {args} ---")
+
+    # --- Guardrail Logic ---
+    # 1. Check if the correct tool is being called
+    target_tool_name = "hsn_code_validation_tool"
+    if tool_name == target_tool_name:
+        
+        # 2. Get the list of HSN codes from 'args' using the correct keyword: "hsn_inputs"
+        # Provide an empty list as a default to prevent errors if it's missing.
+        hsn_codes_to_check = args.get("hsn_inputs", [])
+
+        guardrail_blocked_responses = [
+            "I'm sorry, but I cannot process the validation for the provided code due to a policy restriction.",
+            "This particular HSN/SAC code cannot be validated using this tool. Please check the code or try a different method.",
+            "The request was blocked. There is a restriction on processing this specific type of input.",
+            "Validation for this category of codes is currently restricted. The operation could not be completed.",
+            "I am unable to complete the validation as the provided code falls under a restricted category.",
+            "This request could not be processed. The input is valid in format but is restricted by system policy.",
+            "Processing for this code has been disabled. Please verify your input or contact support for more information on this category."
+        ]
+
+        if not hsn_codes_to_check:
+            # No codes found in the arguments, so nothing to block. Allow to proceed.
+            return None
+
+        # 3. Implement your blocking logic
+        for code in hsn_codes_to_check:
+            if isinstance(code, str) and code.strip().startswith("99"):
+                blocked_code = code
+                print(f"--- Callback: Detected blocked HSN code '{blocked_code}'. Blocking tool execution! ---")
+                
+                # Optionally update state to record the block
+                tool_context.state["guardrail_hsn_block_triggered"] = True
+                
+                # 4. Return a dictionary that matches the tool's expected error output format.
+                # This becomes the tool's result, skipping the actual tool run.
+                error_message = random.choice(guardrail_blocked_responses)
+                # error_message = f"Policy restriction: Validation for HSN code '{blocked_code}' (Services) is not allowed through this tool."
+
+                
+                # This should be a list of dictionaries, just like your real tool's output
+                return [{
+                    "input_hsn": blocked_code,
+                    "is_valid": False,
+                    "reason_code": "BLOCKED_BY_GUARDRAIL",
+                    "message": error_message
+                }]
+        
+        # If the loop completes without finding any blocked codes
+        print(f"--- Callback: All HSN codes are allowed. Proceeding with tool execution. ---")
+
+    # If it's not the target tool or no codes were blocked, allow the call to proceed.
+    return None
+
+
+print("✅ block_paris_tool_guardrail function defined.")
 
 # def load_hsn_data(file_path: str):
 def load_hsn_data(file_path: str) -> Dict[str, str]:
@@ -110,9 +176,6 @@ hsn_master_data = load_hsn_data(file_path)
 # hsn_master_data = load_hsn_data("HSN_SAC.xlsx")
 
 
-# --- Part 2: The Fast and Efficient Tool Function ---
-# This tool now only works with the data already in memory.
-
 # def hsn_code_validation_tool(hsn_inputs: Union[str, List[str]]):
 def hsn_code_validation_tool(hsn_inputs: List[str], tool_context:ToolContext) -> List[Dict[str, Any]]:
     """
@@ -130,18 +193,6 @@ def hsn_code_validation_tool(hsn_inputs: List[str], tool_context:ToolContext) ->
             "reason_code": "DATASTORE_UNAVAILABLE",
             "message": "The HSN master data failed to load at startup. Cannot perform validation."
         }]
-
-    # Normalize input to always be a list
-    # if isinstance(hsn_inputs, str):
-    #     codes_to_validate = [hsn_inputs]
-    # elif isinstance(hsn_inputs, list):
-    #     codes_to_validate = hsn_inputs
-    # else:
-    #     return [{
-    #         "input_hsn": str(hsn_inputs), "is_valid": False,
-    #         "reason_code": "INVALID_INPUT_TYPE",
-    #         "message": "Input must be a string or a list of strings."
-    #     }]
 
     # The agent will call this tool with a list, so we can remove redundant type checks.
     if not isinstance(hsn_inputs, list):
@@ -229,7 +280,8 @@ root_agent = Agent(
     """,
     tools=[hsn_code_validation_tool],
     output_key="hsn_agent_last_response",
-    before_model_callback=block_keyword_guardrail
+    before_model_callback=block_keyword_model_guardrail, 
+    before_tool_callback=block_hsn_codes_tool_guardrail
 )
 
 print("\n--- Agent configuration complete. Ready for 'adk web' command. ---")
