@@ -4,6 +4,9 @@ from google.adk.agents import Agent
 import pandas as pd
 from typing import List, Dict, Union, Any
 import os
+from google.adk.sessions import InMemorySessionService
+from google.adk.tools.tool_context import ToolContext
+from google.adk.runners import Runner
 
 # --- Part 1: One-Time Data Loading at Application Startup ---
 # This code runs only ONCE when the 'adk web' command starts the server.
@@ -48,7 +51,7 @@ hsn_master_data = load_hsn_data(file_path)
 # This tool now only works with the data already in memory.
 
 # def hsn_code_validation_tool(hsn_inputs: Union[str, List[str]]):
-def hsn_code_validation_tool(hsn_inputs: List[str]) -> List[Dict[str, Any]]:
+def hsn_code_validation_tool(hsn_inputs: List[str], tool_context:ToolContext) -> List[Dict[str, Any]]:
     """
     Validates one or more HSN codes against the pre-loaded HSN master data.
     This tool should be used for all HSN validation requests. It takes either a 
@@ -107,9 +110,47 @@ def hsn_code_validation_tool(hsn_inputs: List[str]) -> List[Dict[str, Any]]:
         else:
             results.append({"input_hsn": code, "is_valid": False, "reason_code": "NOT_FOUND", "message": "HSN code not found in master data."})
 
+    tool_context.state["hsn_tool_last_result"] = results
+
     return results
 
+
+session_service_stateful = InMemorySessionService()
+
+APP_NAME = "hsn_code_agent"
+SESSION_ID_STATEFUL = "session_state_demo_001"
+USER_ID_STATEFUL = "user_state_demo"
+
+# initial_state = {
+#     "user_preference": "give funny response"
+# }
+
+
+session_stateful = session_service_stateful.create_session(
+    app_name=APP_NAME, 
+    user_id=USER_ID_STATEFUL,
+    session_id=SESSION_ID_STATEFUL
+    # state=initial_state 
+)
+
+print(f"Session '{SESSION_ID_STATEFUL}' created for user '{USER_ID_STATEFUL}'.")
+
+retrieved_session = session_service_stateful.get_session(app_name=APP_NAME,
+                                                         user_id=USER_ID_STATEFUL,
+                                                         session_id = SESSION_ID_STATEFUL)
+
+print("\n--- Initial Session State ---")
+if retrieved_session:
+    print(retrieved_session)
+else:
+    print("Error: Could not retrieve session.")
+
 # --- Part 3: Initialize the Root Agent ---
+
+root_agent_stateful = None
+runner_root_stateful = None
+
+# if hsn_code_validation_tool in globals():  
 
 root_agent = Agent(
     name="hsn_code_agent",
@@ -123,7 +164,12 @@ root_agent = Agent(
     Present the results from the tool to the user in a clear, easy-to-read format.
     If a code is valid, state its description. If invalid, state the reason.
     """,
-    tools=[hsn_code_validation_tool]
+    tools=[hsn_code_validation_tool],
+    output_key="hsn_agent_last_response"
 )
 
 print("\n--- Agent configuration complete. Ready for 'adk web' command. ---")
+
+# else:
+#     print(" Cannot create stateful root agent. Prerequisites missing.")
+#     if 'hsn_code_validation_tool' not in globals(): print(" - hsn_code_validation_tool  missing.")
