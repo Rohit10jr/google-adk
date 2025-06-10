@@ -2,8 +2,74 @@
 
 from google.adk.agents import Agent
 import pandas as pd
-from typing import List, Dict, Union, Any
+from typing import List, Dict, Union, Any, Optional
 import os
+from google.adk.sessions import InMemorySessionService
+from google.adk.tools.tool_context import ToolContext
+from google.adk.runners import Runner
+from google.adk.agents.callback_context import CallbackContext
+from google.adk.models.llm_request import LlmRequest
+from google.adk.models.llm_response import LlmResponse
+from google.genai import types
+import random 
+
+def block_keyword_guardrail(
+    callback_context: CallbackContext, llm_request: LlmRequest
+) -> Optional[LlmResponse]:
+    """
+    Inspects the latest user message blocked words. If found, rejects the LLM call
+    and returns a predefined LlmResponse. Otherwise, returns None to proceed.
+    """
+    agent_name = callback_context.agent_name # Get the name of the agent whose model call is being intercepted
+    print(f"--- Callback: block_keyword_guardrail running for agent: {agent_name} ---")
+
+    # Extract the text from the latest user message in the request history
+    last_user_message_text = ""
+    if llm_request.contents:
+        # Find the most recent message with role 'user'
+        for content in reversed(llm_request.contents):
+            if content.role == 'user' and content.parts:
+                # Assuming text is in the first part for simplicity
+                if content.parts[0].text:
+                    last_user_message_text = content.parts[0].text
+                    break # Found the last user message text
+
+    print(f"--- Callback: Inspecting last user message: '{last_user_message_text[:100]}...' ---") # Log first 100 chars
+
+    # --- Guardrail Logic ---
+    # keyword_to_block = "BLOCK"
+    keywords_to_block = ["STUPID", "BLOCK"]
+
+    blocked_responses = [
+        "I'm sorry, I cannot process this request as it contains inappropriate language.",
+        "This query cannot be processed due to the presence of a blocked word.",
+        "To maintain a respectful environment, I am unable to respond to messages containing certain terms.",
+        "Your request has been flagged and cannot be completed.",
+        "I cannot proceed with this request. Please rephrase your query without using blocked words."
+    ]
+
+    for keyword in keywords_to_block:
+        if keyword in last_user_message_text.upper():
+            print(f"--- Callback: Found '{keyword}'. Blocking LLM call! ---")
+            callback_context.state["guardrail_block_keyword_triggered"] = True
+            print(f"--- Callback: Set state 'guardrail_block_keyword_triggered': True ---")
+
+            random_message = random.choice(blocked_responses)
+
+            # Return a response indicating the block
+            return LlmResponse(
+                content=types.Content(
+                    role="model",
+                    parts=[types.Part(text=random_message)],
+                    # parts=[types.Part(text=f"I cannot process this request because it contains a blocked term.")],
+                )
+            )
+
+    # If the loop completes without finding any blocked keywords
+    print(f"--- Callback: No blocked keywords found. Allowing LLM call for {agent_name}. ---")
+    return None # Returning None signals ADK to continue normally
+
+# print("block_keyword_guardrail function defined.")
 
 # --- Part 1: One-Time Data Loading at Application Startup ---
 # This code runs only ONCE when the 'adk web' command starts the server.
@@ -48,7 +114,7 @@ hsn_master_data = load_hsn_data(file_path)
 # This tool now only works with the data already in memory.
 
 # def hsn_code_validation_tool(hsn_inputs: Union[str, List[str]]):
-def hsn_code_validation_tool(hsn_inputs: List[str]) -> List[Dict[str, Any]]:
+def hsn_code_validation_tool(hsn_inputs: List[str], tool_context:ToolContext) -> List[Dict[str, Any]]:
     """
     Validates one or more HSN codes against the pre-loaded HSN master data.
     This tool should be used for all HSN validation requests. It takes either a 
@@ -107,9 +173,47 @@ def hsn_code_validation_tool(hsn_inputs: List[str]) -> List[Dict[str, Any]]:
         else:
             results.append({"input_hsn": code, "is_valid": False, "reason_code": "NOT_FOUND", "message": "HSN code not found in master data."})
 
+    tool_context.state["hsn_tool_last_result"] = results
+
     return results
 
+
+session_service_stateful = InMemorySessionService()
+
+APP_NAME = "hsn_code_agent"
+SESSION_ID_STATEFUL = "session_state_demo_001"
+USER_ID_STATEFUL = "user_state_demo"
+
+# initial_state = {
+#     "user_preference": "give funny response"
+# }
+
+
+session_stateful = session_service_stateful.create_session(
+    app_name=APP_NAME, 
+    user_id=USER_ID_STATEFUL,
+    session_id=SESSION_ID_STATEFUL
+    # state=initial_state 
+)
+
+print(f"Session '{SESSION_ID_STATEFUL}' created for user '{USER_ID_STATEFUL}'.")
+
+retrieved_session = session_service_stateful.get_session(app_name=APP_NAME,
+                                                         user_id=USER_ID_STATEFUL,
+                                                         session_id = SESSION_ID_STATEFUL)
+
+print("\n--- Initial Session State ---")
+if retrieved_session:
+    print(retrieved_session)
+else:
+    print("Error: Could not retrieve session.")
+
 # --- Part 3: Initialize the Root Agent ---
+
+root_agent_stateful = None
+runner_root_stateful = None
+
+# if hsn_code_validation_tool in globals():  
 
 root_agent = Agent(
     name="hsn_code_agent",
@@ -123,7 +227,13 @@ root_agent = Agent(
     Present the results from the tool to the user in a clear, easy-to-read format.
     If a code is valid, state its description. If invalid, state the reason.
     """,
-    tools=[hsn_code_validation_tool]
+    tools=[hsn_code_validation_tool],
+    output_key="hsn_agent_last_response",
+    before_model_callback=block_keyword_guardrail
 )
 
 print("\n--- Agent configuration complete. Ready for 'adk web' command. ---")
+
+# else:
+#     print(" Cannot create stateful root agent. Prerequisites missing.")
+#     if 'hsn_code_validation_tool' not in globals(): print(" - hsn_code_validation_tool  missing.")
