@@ -247,17 +247,23 @@ session_stateful = session_service_stateful.create_session(
     # state=initial_state 
 )
 
+# session_service_stateful.create_session(
+#     app_name=APP_NAME, 
+#     user_id=USER_ID_STATEFUL,
+#     session_id=SESSION_ID_STATEFUL
+# )
+
 print(f"Session '{SESSION_ID_STATEFUL}' created for user '{USER_ID_STATEFUL}'.")
 
 retrieved_session = session_service_stateful.get_session(app_name=APP_NAME,
                                                          user_id=USER_ID_STATEFUL,
                                                          session_id = SESSION_ID_STATEFUL)
 
-print("\n--- Initial Session State ---")
-if retrieved_session:
-    print(retrieved_session)
-else:
-    print("Error: Could not retrieve session.")
+# print("\n--- Initial Session State ---")
+# if retrieved_session:
+#     print(retrieved_session)
+# else:
+#     print("Error: Could not retrieve session.")
 
 # --- Part 3: Initialize the Root Agent ---
 
@@ -269,7 +275,7 @@ runner_root_stateful = None
 root_agent = Agent(
     name="hsn_code_agent",
     # Consider using the latest flash model for best performance
-    model="gemini-1.5-flash-001",
+    model="gemini-2.0-flash",
     description="Agent to validate and look up HSN codes using a preloaded master data file.",
     instruction="""
     You are a helpful and efficient assistant for validating HSN codes.
