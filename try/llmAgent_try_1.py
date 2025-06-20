@@ -80,6 +80,12 @@ Use your knowledge to determine the capital and estimate the population. Do not 
 session_service = InMemorySessionService()
 
 # Create separate sessions for clarity, though not strictly necessary if context is managed
+# RuntimeWarning: coroutine 'InMemorySessionService.create_session' was never awaited
+# ValueError: Session not found: session_tool_agent_xyz
+# session_service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID_TOOL_AGENT)
+# session_service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID_SCHEMA_AGENT)
+
+# SyntaxError: 'await' outside function
 # await session_service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID_TOOL_AGENT)
 # await session_service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID_SCHEMA_AGENT)
 
@@ -115,7 +121,8 @@ async def call_agent_and_print(
             final_response_content = event.content.parts[0].text
 
     print(f"<<< Agent '{agent_instance.name}' Response: {final_response_content}")
-
+    # AttributeError: 'coroutine' object has no attribute 'state'
+    # RuntimeWarning: coroutine 'InMemorySessionService.get_session' was never awaited
     current_session = await session_service.get_session(app_name=APP_NAME,
                                                   user_id=USER_ID,
                                                   session_id=session_id)
@@ -135,9 +142,9 @@ async def call_agent_and_print(
 
 # --- 7. Run Interactions ---
 async def main():
-    
     await session_service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID_TOOL_AGENT)
     await session_service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID_SCHEMA_AGENT)
+
 
     print("--- Testing Agent with Tool ---")
     await call_agent_and_print(capital_runner, capital_agent_with_tool, SESSION_ID_TOOL_AGENT, '{"country": "France"}')
@@ -148,5 +155,6 @@ async def main():
     await call_agent_and_print(structured_runner, structured_info_agent_schema, SESSION_ID_SCHEMA_AGENT, '{"country": "Japan"}')
 
 if __name__ == "__main__":
+    # SyntaxError: 'await' outside function
     # await main()
     asyncio.run(main())

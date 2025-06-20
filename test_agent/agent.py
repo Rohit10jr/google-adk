@@ -15,28 +15,8 @@ import logging
 logging.basicConfig(level=logging.ERROR)
 
 print("Libraries imported.")
-
-import os 
-from dotenv import load_dotenv
-from pathlib import Path
-
-load_dotenv()
-
 # Load .env from root directory
 # load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / '.env')
-
-
-google_key = os.getenv("GOOGLE_API_KEY")
-openai_key = os.getenv("GOOGLE_API_KEY_2")
-anthropic_key = os.getenv("GOOGLE_API_KEY_3")
-
-print("API Keys Set:")
-# print(google_key)
-print(f"Google API Key set: {'Yes' if google_key and google_key != 'GOOGLE_API_KEY' else 'No (REPLACE PLACEHOLDER!)'}")
-print(f"OpenAI API Key set: {'Yes' if openai_key and openai_key != 'GOOGLE_API_KEY_2' else 'No (REPLACE PLACEHOLDER!)'}")
-print(f"Anthropic API Key set: {'Yes' if anthropic_key and anthropic_key != 'YOUR_ANTHROPIC_API_KEY' != 'GOOGLE_API_KEY_3' else 'No (REPLACE PLACEHOLDER!)'}")
-
-os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "False"
 
 # --- Define Model Constants for easier use ---
 
@@ -79,7 +59,7 @@ def get_weather(city: str) -> dict:
 # Use one of the model constants defined earlier
 AGENT_MODEL = MODEL_GEMINI_2_0_FLASH # Starting with Gemini
 
-weather_agent = Agent(
+root_agent = Agent(
     name="weather_agent_v1",
     model=AGENT_MODEL, # Can be a string for Gemini or a LiteLlm object
     description="Provides weather information for specific cities.",
@@ -91,7 +71,7 @@ weather_agent = Agent(
     tools=[get_weather], # Pass the function directly
 )
 
-print(f"Agent '{weather_agent.name}' created using model '{AGENT_MODEL}'.")
+print(f"Agent '{root_agent.name}' created using model '{AGENT_MODEL}'.")
 
 # @title Setup Session Service and Runner
 
@@ -108,7 +88,7 @@ SESSION_ID = "session_001" # Using a fixed ID for simplicity
 # --- Runner ---
 # Key Concept: Runner orchestrates the agent execution loop.
 runner = Runner(
-    agent=weather_agent, # The agent we want to run
+    agent=root_agent, # The agent we want to run
     app_name=APP_NAME,   # Associates runs with our app
     session_service=session_service # Uses our session manager
 )
