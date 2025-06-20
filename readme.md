@@ -1,6 +1,6 @@
 # Google ADK Example Agents
 
-This repository contains multiple example agents and tools built using the [Google ADK (Agent Development Kit)](https://developers.google.com/adk) in Python. The goal is to explore and experiment with various agent patterns, tools, and features as demonstrated in the official Google ADK documentation.
+This repository contains multiple example agents and tools built using the [Google ADK (Agent Development Kit)](https://github.com/google/adk-python) in Python. The goal is to explore and experiment with various agent patterns, tools, and features as demonstrated in the official Google ADK documentation.
 
 ## Features
 
@@ -66,4 +66,4 @@ This repository contains multiple example agents and tools built using the [Goog
 
 ---
 
-For more information, refer to the [Google ADK documentation](https://developers.google.com/adk).
+For more information, refer to the [Google ADK documentation](https://github.com/google/adk-python).
